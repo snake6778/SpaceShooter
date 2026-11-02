@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Neon Drift — Space Arcade</title>
+  <style>
+    :root {
+      --bg: #05070f;
+      --cyan: #3ef0ff;
+      --magenta: #ff3ec8;
+      --lime: #b6ff3e;
+      --gold: #ffd166;
+      --panel: rgba(8, 12, 28, 0.72);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(ellipse at 50% 20%, #15204a 0%, var(--bg) 70%);
+      color: #d8f6ff;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+    }
+
+    #wrap {
+      display: grid;
+      place-items: center;
+      width: 100%;
+      height: 100%;
+    }
+
+    canvas {
+      display: block;
+      width: min(100vw, 100vh * 0.72);
+      height: min(100vh, 100vw / 0.72);
+      max-width: 540px;
+      max-height: 750px;
+      background: #04060d;
+      border: 2px solid rgba(62, 240, 255, 0.35);
+      box-shadow:
+        0 0 24px rgba(62, 240, 255, 0.18),
+        0 0 80px rgba(255, 62, 200, 0.08),
+        inset 0 0 40px rgba(10, 20, 60, 0.4);
+      image-rendering: auto;
+    }
+
+    #hud {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(92vw, 520px);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      pointer-events: none;
+      z-index: 2;
+      text-shadow: 0 0 10px rgba(62, 240, 255, 0.7);
+    }
+
+    .stat {
+      background: var(--panel);
+      border: 1px solid rgba(62, 240, 255, 0.3);
+      padding: 8px 12px;
+      min-width: 140px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-size: 12px;
+    }
+
+    .stat strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 20px;
+      color: var(--cyan);
+    }
+
+    #health-wrap { min-width: 150px; }
+    #hud .stat { min-width: 0; flex: 1; padding: 8px; }
+    #health-bar { position: relative; }
+    #health-bar::after {
+      content: ""; position: absolute; inset: 0;
+      background: repeating-linear-gradient(90deg, transparent 0, transparent calc(10% - 2px), #15070b calc(10% - 2px), #15070b 10%);
+    }
+    #lives-label { margin-top: 5px; color: #ff6978; font-size: 11px; letter-spacing: 0.05em; }
+
+
+    #health-bar {
+      margin-top: 6px;
+      height: 10px;
+      background: rgba(255, 62, 200, 0.12);
+      border: 1px solid rgba(255, 62, 200, 0.4);
+      overflow: hidden;
+    }
+
+    #health-fill {
+      height: 100%;
+      width: 100%;
+      background: #ff334f;
+      box-shadow: 0 0 12px #ff334f;
+      transition: width 120ms linear;
+    }
+
+    #overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      place-items: center;
+      background: rgba(2, 4, 12, 0.72);
+      z-index: 3;
+      backdrop-filter: blur(4px);
+    }
+
+    #overlay.show { display: grid; }
+
+    .panel {
+      width: min(92vw, 420px);
+      padding: 32px 28px;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(16, 24, 56, 0.95), rgba(6, 8, 20, 0.95));
+      border: 1px solid rgba(62, 240, 255, 0.45);
+      box-shadow: 0 0 40px rgba(255, 62, 200, 0.18);
+    }
+
+    .panel h1 {
+      font-size: 42px;
+      letter-spacing: 0.18em;
+      color: var(--cyan);
+      text-shadow: 0 0 18px var(--cyan);
+    }
+
+    .panel p {
+      margin: 14px 0 22px;
+      color: #9fd8e8;
+      letter-spacing: 0.08em;
+    }
+
+    button {
+      cursor: pointer;
+      border: 1px solid var(--cyan);
+      background: transparent;
+      color: var(--cyan);
+      padding: 12px 28px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      font-weight: 700;
+      box-shadow: 0 0 16px rgba(62, 240, 255, 0.25);
+    }
+
+    button:hover {
+      background: rgba(62, 240, 255, 0.12);
+    }
+
+    #power-status {
+      position: fixed; bottom: 44px; left: 50%; transform: translateX(-50%);
+      width: min(92vw, 520px); text-align: center; color: var(--gold);
+      font-size: 13px; pointer-events: none; text-shadow: 0 0 8px #05070f;
+    }
+
+    #hint {
+      position: fixed;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(180, 230, 255, 0.55);
+      pointer-events: none;
+    }
+
+    #wrap { display:flex; justify-content:center; align-items:center; gap:18px; padding:18px; }
+    #arena { position:relative; width:min(460px, calc((100vh - 110px) * .72)); flex:none; }
+    canvas { width:100%; height:auto; max-width:none; max-height:none; }
+    #hud { position:static; transform:none; width:100%; gap:6px; margin-bottom:8px; }
+    #terminal { width:280px; height:min(650px, 85vh); background:rgba(5,12,19,.95);
+      border:1px solid #24534c; padding:14px; display:flex; flex-direction:column; }
+    #terminal h2 { font:14px monospace; letter-spacing:.12em; color:#24ff78; margin-bottom:12px; }
+    #combat-log { overflow:auto; flex:1; font:12px/1.6 monospace; color:#9bd8c4; overflow-wrap:anywhere; }
+    #combat-log p { border-bottom:1px solid #142924; padding:6px 0; }
+    #sound-toggle { margin-top:12px; padding:9px; font-size:11px; letter-spacing:.08em; }
+    @media(max-width:700px) {
+      #wrap { flex-direction:column; gap:10px; padding:8px; }
+      #arena { width:min(390px, 94vw, calc((100vh - 245px) * .72)); }
+      #terminal { width:min(94vw,390px); height:130px; padding:8px; }
+      #terminal h2 { font-size:11px; margin-bottom:4px; }
+      #sound-toggle { padding:5px; margin-top:4px; }
+      #hint { font-size:9px; letter-spacing:.04em; }
+    }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <div id="arena">
+  <div id="hud">
+    <div class="stat">Score<strong id="score">0</strong></div>
+    <div class="stat" id="health-wrap">
+      Hull <span id="hull-value">100%</span>
+      <div id="health-bar" role="progressbar" aria-label="Ship hull health" aria-valuemin="0" aria-valuemax="100"><div id="health-fill"></div></div>
+      <div id="lives-label">Lives: <span id="lives">3</span></div>
+    </div>
+    <div class="stat">Wave<strong id="wave">1</strong></div>
+  </div>
+
+      <canvas id="game" width="540" height="750"></canvas>
+    </div>
+    <aside id="terminal" aria-label="Combat terminal">
+      <h2>COMBAT // LIVE FEED</h2>
+      <div id="combat-log"></div>
+      <button type="button" id="sound-toggle" aria-pressed="false">Sound: On</button>
+    </aside>
+  </div>
+
+      <div id="overlay" aria-hidden="true">
+    <div class="panel">
+      <h1>GAME OVER</h1>
+      <p id="final-score">Score: 0</p>
+      <button type="button" id="restart">Restart</button>
+    </div>
+  </div>
+  <div id="power-status" role="status" aria-live="polite"></div>
+  <div id="hint">← → or A D to move · Space to fire</div>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+      const W = canvas.width;
+      const H = canvas.height;
+
+      const scoreEl = document.getElementById("score");
+      const waveEl = document.getElementById("wave");
+      const healthFill = document.getElementById("health-fill");
+      const overlay = document.getElementById("overlay");
+      const finalScore = document.getElementById("final-score");
+      const restartBtn = document.getElementById("restart");
+
+      const powerStatus = document.getElementById("power-status");
+      const POWER_DURATION = 30;
+      let elapsed = 0, greenTimer = 30, blueTimer = 45;
+      let shieldTimer = 0, gunTimer = 0, gunLevel = 0;
+      let shieldHits = 0, lives = 3, respawnTimer = 0;
+      let waveBreakTimer = 0;
+      const TRANSITION_DURATION = 3;
+      let enemyShots = [];
+      let pickups = [];
+      const combatLog = document.getElementById("combat-log");
+      const soundToggle = document.getElementById("sound-toggle");
+      let audio = null, muted = false;
+
+      function logCombat(message) {
+        const row = document.createElement("p");
+        row.textContent = "[" + Math.floor(elapsed / 60).toString().padStart(2, "0") + ":" +
+          Math.floor(elapsed % 60).toString().padStart(2, "0") + "] " + message;
+        combatLog.appendChild(row);
+        while (combatLog.children.length > 60) combatLog.firstChild.remove();
+        combatLog.scrollTop = combatLog.scrollHeight;
+      }
+
+      function unlockAudio() {
+        const Audio = window.AudioContext || window.webkitAudioContext;
+        if (!Audio) return;
+        try {
+          if (!audio) audio = new Audio();
+          if (audio.state === "suspended") audio.resume().catch(() => {});
+        } catch (_) { /* Gameplay continues if audio is unavailable. */ }
+      }
+
+      function sound(kind) {
+        if (!audio || muted || audio.state !== "running") return;
+        const tones = {
+          fire: [780, 300, .065, .025], enemy: [280, 140, .10, .035],
+          hit: [120, 45, .16, .07], shield: [520, 950, .14, .05],
+          pickup: [440, 1320, .30, .06], explosion: [160, 25, .28, .08],
+          death: [300, 30, .55, .10]
+        };
+        const [from, to, duration, volume] = tones[kind];
+        const osc = audio.createOscillator(), gain = audio.createGain();
+        osc.type = kind === "explosion" || kind === "death" ? "sawtooth" : "square";
+        osc.frequency.setValueAtTime(from, audio.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(to, audio.currentTime + duration);
+        gain.gain.setValueAtTime(volume, audio.currentTime);
+        gain.gain.exponentialRampToValueAtTime(.001, audio.currentTime + duration);
+        osc.connect(gain); gain.connect(audio.destination);
+        osc.start(); osc.stop(audio.currentTime + duration);
+        osc.onended = () => { osc.disconnect(); gain.disconnect(); };
+      }
+
+
+      const keys = Object.create(null);
+      const MAX_HEALTH = 100;
+      const PLAYER_SPEED = 380;
+      const LASER_SPEED = 640;
+      const FIRE_COOLDOWN = 0.18;
+
+      let lastTime = 0;
+      let spawnTimer = 0;
+      let fireTimer = 0;
+      let score = 0;
+      let wave = 1;
+      let health = MAX_HEALTH;
+      let running = true;
+      let shake = 0;
+      let stars = [];
+      let player, lasers, enemies, particles, flashes;
+
+      function rand(min, max) {
+        return min + Math.random() * (max - min);
+      }
+
+      function clamp(v, a, b) {
+        return Math.max(a, Math.min(b, v));
+      }
+
+      function makeStars() {
+        stars = Array.from({ length: 90 }, () => ({
+          x: Math.random() * W,
+          y: Math.random() * H,
+          z: rand(0.3, 1.6),
+          tw: Math.random() * Math.PI * 2,
+        }));
+      }
+
+      function resetGame() {
+        elapsed = 0;
+        greenTimer = 30;
+        blueTimer = 45;
+        shieldTimer = gunTimer = gunLevel = 0;
+        shieldHits = 0;
+        lives = 3;
+        respawnTimer = 0;
+        waveBreakTimer = 0;
+        enemyShots = [];
+        pickups = [];
+        combatLog.textContent = "";
+        logCombat("Mission started. Three lives ready.");
+        powerStatus.textContent = "";
+        score = 0;
+        wave = 1;
+        health = MAX_HEALTH;
+        spawnTimer = 0.6;
+        fireTimer = 0;
+        shake = 0;
+        running = true;
+        overlay.classList.remove("show");
+        overlay.setAttribute("aria-hidden", "true");
+        player = {
+          x: W / 2,
+          y: H - 78,
+          w: 28,
+          h: 32,
+          vx: 0,
+        };
+        lasers = [];
+        enemies = [];
+        particles = [];
+        flashes = [];
+        makeStars();
+        updateHud();
+      }
+
+      function updateHud() {
+        scoreEl.textContent = String(score);
+        waveEl.textContent = String(wave);
+        document.getElementById("lives").textContent = String(lives);
+        document.getElementById("hull-value").textContent = Math.ceil(health) + "%";
+        document.getElementById("health-bar").setAttribute("aria-valuenow", String(health));
+        healthFill.style.width = `${(health / MAX_HEALTH) * 100}%`;
+      }
+
+      function spawnEnemy(specialKind) {
+        const kind = specialKind || (Math.random() < 0.22 + wave * 0.02 ? "heavy" : "scout");
+        const w = kind === "heavy" ? 42 : 30;
+        enemies.push({
+          x: rand(28, W - 28),
+          y: -30,
+          w,
+          h: kind === "heavy" ? 34 : 24,
+          kind,
+          shotTimer: rand(0.8, 1.5),
+          hp: kind === "heavy" ? 3 : 1,
+          speed: (kind === "heavy" ? 55 : 90) + wave * 12,
+          drift: rand(-40, 40),
+          phase: Math.random() * Math.PI * 2,
+        });
+      }
+
+      function enemyColor(e) {
+        return { heavy: "#ff3ec8", scout: "#b6ff3e", shooter: "#24ff78", bonus: "#4287ff" }[e.kind];
+      }
+
+      function grantPowerUp(type) {
+        sound("pickup");
+        if (type === "shield") {
+          shieldTimer = POWER_DURATION;
+          shieldHits = 4;
+          logCombat("Shield acquired: 4 hits / 30 seconds.");
+          burst(player.x, player.y, "#4287ff", 26);
+        } else {
+          gunLevel = Math.min(2, gunLevel + 1);
+          gunTimer = POWER_DURATION;
+          logCombat((gunLevel === 1 ? "Double fire" : "Spread fire") + " acquired. Gun timer: 30 seconds.");
+          burst(player.x, player.y, "#ffd166", 26);
+        }
+      }
+
+      function firePlayer() {
+        sound("fire");
+        const shots = gunLevel === 2 ? [[0, 0], [-10, -220], [10, 220]]
+          : gunLevel === 1 ? [[-8, 0], [8, 0]] : [[0, 0]];
+        for (const [offset, vx] of shots) {
+          lasers.push({ x: player.x + offset, y: player.y - 20,
+            prevY: player.y - 20, w: 8, h: 22, vx });
+        }
+      }
+
+      function burst(x, y, color, n = 14) {
+        for (let i = 0; i < n; i++) {
+          const a = Math.random() * Math.PI * 2;
+          const s = rand(40, 220);
+          particles.push({
+            x, y,
+            vx: Math.cos(a) * s,
+            vy: Math.sin(a) * s,
+            life: rand(0.25, 0.55),
+            max: 0.55,
+            color,
+            size: rand(1.5, 3.4),
+          });
+        }
+      }
+
+      function glowStroke(color, blur = 14) {
+        ctx.strokeStyle = color;
+        ctx.shadowColor = color;
+        ctx.shadowBlur = blur;
+      }
+
+      function drawShip(p) {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        if (respawnTimer > 0) ctx.globalAlpha = 0.4 + Math.abs(Math.sin(elapsed * 16)) * 0.6;
+        glowStroke("#3ef0ff", 16);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, -18);
+        ctx.lineTo(14, 12);
+        ctx.lineTo(6, 8);
+        ctx.lineTo(0, 14);
+        ctx.lineTo(-6, 8);
+        ctx.lineTo(-14, 12);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-8, 6);
+        ctx.lineTo(0, 16);
+        ctx.lineTo(8, 6);
+        ctx.stroke();
+        if (shieldTimer > 0) {
+          glowStroke("#4287ff", 20);
+          ctx.globalAlpha = shieldTimer > 3 ? 0.85 : 0.45 + Math.sin(elapsed * 18) * 0.3;
+          ctx.beginPath();
+          ctx.arc(0, 0, 29, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      function drawEnemy(e) {
+        ctx.save();
+        ctx.translate(e.x, e.y);
+        const color = enemyColor(e);
+        glowStroke(color, 12);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, 14);
+        ctx.lineTo(e.w * 0.45, -8);
+        ctx.lineTo(e.w * 0.18, -4);
+        ctx.lineTo(0, -14);
+        ctx.lineTo(-e.w * 0.18, -4);
+        ctx.lineTo(-e.w * 0.45, -8);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(0, -2, e.kind === "bonus" ? 8 : 4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      function drawLaser(l) {
+        glowStroke("#7af6ff", 10);
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(l.x, l.y + 10);
+        ctx.lineTo(l.x, l.y - 10);
+        ctx.stroke();
+      }
+
+      function body(o) {
+        if (o.prevY == null) return o;
+        const top = Math.min(o.y, o.prevY) - o.h * 0.5;
+        const bot = Math.max(o.y, o.prevY) + o.h * 0.5;
+        return { x: o.x, y: (top + bot) * 0.5, w: o.w, h: bot - top };
+      }
+
+      function hit(a, b, pad = 0) {
+        const A = body(a);
+        const B = body(b);
+        return Math.abs(A.x - B.x) < (A.w + B.w) * 0.5 + pad &&
+               Math.abs(A.y - B.y) < (A.h + B.h) * 0.5 + pad;
+      }
+
+      function damage(amount, escaped = false, source = "enemy collision") {
+        if (!running || respawnTimer > 0) return;
+        if (!escaped && shieldTimer > 0 && shieldHits > 0) {
+          shieldHits--;
+          sound("shield");
+          logCombat("Shield takes a hit! " + shieldHits + "/4 remaining.");
+          if (shieldHits === 0) shieldTimer = 0;
+          burst(player.x, player.y, "#4287ff", 10);
+          return;
+        }
+        logCombat("Damage from " + (escaped ? "missed enemy" : source) + ": -" + amount + " hull.");
+        sound("hit");
+        health = Math.max(0, health - amount);
+        shake = Math.min(12, shake + 6);
+        if (health <= 0) {
+          lives--;
+          sound("death");
+          logCombat("Ship destroyed. Lives remaining: " + lives + ".");
+          burst(player.x, player.y, "#ff334f", 35);
+          if (lives > 0) {
+            health = MAX_HEALTH;
+            player.x = W / 2;
+            shieldTimer = shieldHits = gunTimer = gunLevel = 0;
+            enemyShots = [];
+            respawnTimer = TRANSITION_DURATION;
+            waveBreakTimer = 0;
+            enemies = [];
+            lasers = [];
+            spawnTimer = 0.6;
+            logCombat("Player died. Respawning in 3 seconds.");
+          } else {
+            gameOver();
+          }
+        }
+        updateHud();
+      }
+
+      function gameOver() {
+        running = false;
+        logCombat("GAME OVER. Final score: " + score);
+        finalScore.textContent = `Score: ${score}`;
+        overlay.classList.add("show");
+        overlay.setAttribute("aria-hidden", "false");
+      }
+
+      function update(dt) {
+        if (!running) {
+          updateParticles(dt);
+          return;
+        }
+
+        if (respawnTimer > 0) {
+          respawnTimer = Math.max(0, respawnTimer - dt);
+          if (respawnTimer === 0) logCombat("Ship respawned. Combat resumed.");
+          updateParticles(dt);
+          return;
+        }
+        elapsed += dt;
+        const nextWave = 1 + Math.floor(score / 250);
+        if (nextWave > wave) {
+          wave = nextWave;
+          waveBreakTimer = TRANSITION_DURATION;
+          spawnTimer = 0.6;
+          logCombat("Wave " + wave + " starting in 3 seconds.");
+          updateHud();
+        } else {
+          waveBreakTimer = Math.max(0, waveBreakTimer - dt);
+        }
+        const canSpawn = waveBreakTimer === 0;
+        if (shieldTimer > 0 && shieldTimer <= dt) logCombat("Shield expired.");
+        if (gunTimer > 0 && gunTimer <= dt) logCombat("Gun upgrade expired. Regular gun restored.");
+        shieldTimer = Math.max(0, shieldTimer - dt);
+        if (shieldTimer === 0) shieldHits = 0;
+        gunTimer = Math.max(0, gunTimer - dt);
+        if (gunTimer === 0) gunLevel = 0;
+        const status = [];
+        if (shieldTimer > 0) status.push("SHIELD " + shieldHits + "/4 · " + Math.ceil(shieldTimer) + "s");
+        if (gunLevel > 0) status.push((gunLevel === 1 ? "DOUBLE FIRE " : "SPREAD FIRE ") + Math.ceil(gunTimer) + "s");
+        const statusText = status.join(" · ");
+        if (powerStatus.textContent !== statusText) powerStatus.textContent = statusText;
+        if (canSpawn) {
+          greenTimer -= dt;
+          blueTimer -= dt;
+        }
+        if (canSpawn && greenTimer <= 0) {
+          spawnEnemy("shooter");
+          greenTimer = rand(1.6, 2.8);
+        }
+        if (canSpawn && blueTimer <= 0) {
+          spawnEnemy("bonus");
+          blueTimer = rand(7, 12);
+        }
+
+        fireTimer = Math.max(0, fireTimer - dt);
+        if (canSpawn) spawnTimer -= dt;
+        shake = Math.max(0, shake - dt * 18);
+
+        const dir = (keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0);
+        player.x = clamp(player.x + dir * PLAYER_SPEED * dt, 22, W - 22);
+
+        if ((keys.Space || keys.KeyW || keys.ArrowUp) && fireTimer <= 0) {
+          firePlayer();
+          fireTimer = FIRE_COOLDOWN;
+        }
+
+        const spawnRate = Math.max(0.38, 1.15 - wave * 0.08);
+        if (canSpawn && spawnTimer <= 0) {
+          spawnEnemy();
+          spawnTimer = spawnRate;
+        }
+
+
+
+        const laserStep = LASER_SPEED * dt;
+        for (let i = lasers.length - 1; i >= 0; i--) {
+          lasers[i].prevY = lasers[i].y;
+          lasers[i].y -= laserStep;
+          lasers[i].x += lasers[i].vx * dt;
+          if (lasers[i].y < -20 || lasers[i].x < -20 || lasers[i].x > W + 20) lasers.splice(i, 1);
+        }
+
+        for (let i = enemies.length - 1; i >= 0; i--) {
+          const e = enemies[i];
+          e.phase += dt * 2.2;
+          e.x = clamp(e.x + Math.sin(e.phase) * e.drift * dt, 20, W - 20);
+          e.y += e.speed * dt;
+          if (e.kind === "shooter" && e.y > 0 && e.y < player.y - 40) {
+            e.shotTimer -= dt;
+            if (e.shotTimer <= 0) {
+              const dx = player.x - e.x, dy = player.y - e.y;
+              const length = Math.hypot(dx, dy) || 1;
+              enemyShots.push({ x: e.x, y: e.y + 15, prevY: e.y + 15,
+                w: 8, h: 22, vx: dx / length * 240, vy: dy / length * 240 });
+              sound("enemy");
+              e.shotTimer = rand(1.3, 2.1);
+            }
+          }
+
+          if (e.y > H + 30) {
+            enemies.splice(i, 1);
+            damage(e.kind === "heavy" ? 22 : 14, true);
+            if (!running || respawnTimer > 0) return;
+            continue;
+          }
+
+          if (hit(e, player, 4)) {
+            burst(e.x, e.y, enemyColor(e), 20);
+            enemies.splice(i, 1);
+            damage(e.kind === "heavy" ? 28 : 18);
+            if (!running || respawnTimer > 0) return;
+            continue;
+          }
+
+          for (let j = lasers.length - 1; j >= 0; j--) {
+            if (hit(e, lasers[j], 2)) {
+              lasers.splice(j, 1);
+              e.hp -= 1;
+              burst(e.x, e.y, "#7af6ff", 8);
+              if (e.hp <= 0) {
+                const pts = e.kind === "heavy" ? 40 : 15;
+                score += pts;
+                sound("explosion");
+                logCombat(e.kind.charAt(0).toUpperCase() + e.kind.slice(1) + " enemy destroyed. +" + pts + " points.");
+                if (e.kind === "bonus") {
+                  const type = Math.random() < 0.5 ? "shield" : "gun";
+                  pickups.push({ x: e.x, y: e.y, prevY: e.y, w: 26, h: 26, type });
+                  logCombat("Blue ship dropped a " + type + " power-up. Fly into it to collect!");
+                }
+                flashes.push({ x: e.x, y: e.y, life: 0.18, color: enemyColor(e) });
+                burst(e.x, e.y, enemyColor(e), 22);
+                enemies.splice(i, 1);
+                updateHud();
+              }
+              break;
+            }
+          }
+        }
+
+        for (let i = enemyShots.length - 1; i >= 0; i--) {
+          const shot = enemyShots[i];
+          shot.prevY = shot.y;
+          shot.x += shot.vx * dt;
+          shot.y += shot.vy * dt;
+          if (hit(shot, player, 2)) {
+            burst(shot.x, shot.y, shieldTimer > 0 ? "#4287ff" : "#24ff78", 8);
+            enemyShots.splice(i, 1);
+            damage(12, false, "enemy laser");
+            if (!running || respawnTimer > 0) return;
+          } else if (shot.y > H + 20 || shot.x < -20 || shot.x > W + 20) {
+            enemyShots.splice(i, 1);
+          }
+        }
+        for (let i = pickups.length - 1; i >= 0; i--) {
+          const item = pickups[i];
+          item.prevY = item.y;
+          item.y += 125 * dt;
+          if (hit(item, player, 5)) {
+            grantPowerUp(item.type);
+            pickups.splice(i, 1);
+          } else if (item.y > H + 30) {
+            logCombat("Missed " + item.type + " power-up.");
+            pickups.splice(i, 1);
+          }
+        }
+        updateParticles(dt);
+      }
+
+      function updateParticles(dt) {
+        for (let i = particles.length - 1; i >= 0; i--) {
+          const p = particles[i];
+          p.life -= dt;
+          p.x += p.vx * dt;
+          p.y += p.vy * dt;
+          p.vx *= 0.98;
+          p.vy *= 0.98;
+          if (p.life <= 0) particles.splice(i, 1);
+        }
+        for (let i = flashes.length - 1; i >= 0; i--) {
+          flashes[i].life -= dt;
+          if (flashes[i].life <= 0) flashes.splice(i, 1);
+        }
+      }
+
+      function drawBackground(dt) {
+        ctx.fillStyle = "#05070f";
+        ctx.fillRect(0, 0, W, H);
+
+        const g = ctx.createRadialGradient(W * 0.5, H * 0.2, 20, W * 0.5, H * 0.45, H);
+        g.addColorStop(0, "rgba(40, 20, 80, 0.35)");
+        g.addColorStop(1, "rgba(0, 0, 0, 0)");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.save();
+        ctx.shadowBlur = 0;
+        for (const s of stars) {
+          s.y += s.z * 55 * dt;
+          if (s.y > H) {
+            s.y = 0;
+            s.x = Math.random() * W;
+          }
+          const a = 0.35 + Math.sin(s.tw + s.y * 0.02) * 0.25;
+          ctx.fillStyle = `rgba(210, 240, 255, ${a})`;
+          ctx.fillRect(s.x, s.y, s.z, s.z);
+        }
+        ctx.restore();
+      }
+
+      function draw() {
+        ctx.save();
+        if (shake > 0) {
+          ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+        }
+
+        drawBackground(lastDt);
+
+        ctx.globalCompositeOperation = "lighter";
+        for (const f of flashes) {
+          ctx.beginPath();
+          ctx.fillStyle = f.color;
+          ctx.shadowColor = f.color;
+          ctx.shadowBlur = 24;
+          ctx.globalAlpha = f.life / 0.18;
+          ctx.arc(f.x, f.y, 18, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+
+        lasers.forEach(drawLaser);
+        enemies.forEach(drawEnemy);
+        for (const item of pickups) {
+          ctx.save();
+          ctx.translate(item.x, item.y);
+          const color = item.type === "shield" ? "#4287ff" : "#ffd166";
+          glowStroke(color, 16);
+          ctx.lineWidth = 2;
+          ctx.strokeRect(-13, -13, 26, 26);
+          ctx.fillStyle = color;
+          ctx.font = "bold 18px monospace";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(item.type === "shield" ? "S" : "G", 0, 1);
+          ctx.restore();
+        }
+        for (const shot of enemyShots) {
+          glowStroke("#24ff78", 12);
+          ctx.lineWidth = 2.4;
+          ctx.beginPath();
+          ctx.moveTo(shot.x - shot.vx * (20 / 240), shot.y - shot.vy * (20 / 240));
+          ctx.lineTo(shot.x, shot.y);
+          ctx.stroke();
+        }
+        if (running && respawnTimer === 0) drawShip(player);
+
+        for (const p of particles) {
+          ctx.globalAlpha = p.life / p.max;
+          glowStroke(p.color, 8);
+          ctx.fillStyle = p.color;
+          ctx.fillRect(p.x, p.y, p.size, p.size);
+        }
+        ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = "source-over";
+        ctx.shadowBlur = 0;
+        if (running && (respawnTimer > 0 || waveBreakTimer > 0)) {
+          const respawning = respawnTimer > 0;
+          const remaining = Math.ceil(respawning ? respawnTimer : waveBreakTimer);
+          ctx.fillStyle = "rgba(3, 7, 18, 0.86)";
+          ctx.fillRect(30, H / 2 - 65, W - 60, 130);
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillStyle = respawning ? "#ff6978" : "#3ef0ff";
+          ctx.font = "bold 27px monospace";
+          ctx.fillText(respawning ? "SHIP DESTROYED" : "WAVE " + wave + " STARTING", W / 2, H / 2 - 22);
+          ctx.fillStyle = "#d8f6ff";
+          ctx.font = "18px monospace";
+          ctx.fillText((respawning ? "Respawning in " : "Enemies arriving in ") + remaining + "...", W / 2, H / 2 + 22);
+        }
+        ctx.restore();
+      }
+
+      let lastDt = 0;
+      function loop(ts) {
+        const dt = document.hidden ? 0 : Math.min(0.033, (ts - lastTime) / 1000 || 0);
+        lastTime = ts;
+        lastDt = dt;
+        update(dt);
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      function bindKey(e, down) {
+        keys[e.code] = down;
+        if (e.key === " " || e.key === "Spacebar") keys.Space = down;
+        if (e.key === "a" || e.key === "A") keys.KeyA = down;
+        if (e.key === "d" || e.key === "D") keys.KeyD = down;
+      }
+
+      window.addEventListener("keydown", (e) => {
+        unlockAudio();
+        bindKey(e, true);
+        if (e.code === "Space" || e.key === " ") e.preventDefault();
+        if (!running && (e.code === "Enter" || e.code === "Space" || e.key === " ")) resetGame();
+      });
+      window.addEventListener("keyup", (e) => {
+        bindKey(e, false);
+      });
+      window.addEventListener("blur", () => { for (const key of Object.keys(keys)) keys[key] = false; });
+      window.addEventListener("pointerdown", unlockAudio);
+      soundToggle.addEventListener("click", () => {
+        unlockAudio();
+        muted = !muted;
+        soundToggle.textContent = muted ? "Sound: Off" : "Sound: On";
+        soundToggle.setAttribute("aria-pressed", String(muted));
+      });
+      restartBtn.addEventListener("click", resetGame);
+
+      resetGame();
+      requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>
